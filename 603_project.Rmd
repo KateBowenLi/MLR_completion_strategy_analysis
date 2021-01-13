@@ -1,0 +1,244 @@
+---
+title: "603_final_project"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1.0 Get the model
+```{r}
+library(olsrr)
+library(mctest)
+library(GGally)
+library(leaps)
+library(Ecdat)
+library(car)
+options(max.print=999999)
+```
+```{r}
+rdata = read.csv('603----wells20201124.csv')
+colnames(rdata)[1]='totalgas'
+head(rdata,4)
+```
+```{r}
+rdata[is.na(rdata)]=0
+head(rdata,4)
+```
+
+simple linear regression
+Individual t-test:
+
+$$H_o:\beta_i=0\\H_a:\beta_i \neq0$$
+```{r}
+reg1 = lm(totalgas~factor(Well.Status)+MD..m.+TVD..m.+
+            factor(Energizer)+Total.Proppant.Design..tonne.+Avg.Proppant.Design.per.Stage..tonne.+
+            Total.Proppant.Placed..tonne.+X..of.Proppant.Placed....+
+            Total.Fluid.Pumped..m3.+Avg.Fluid.Pumped.per.Stage..m3.+Stages.Actual+Completed.Length..m.
+          +Avg.Frac.Spacing..m.+Avg.Fluid.Pumped...Meter..m3.+Avg.Proppant.Placed...Meter..tonne.
+          +Acid.Vol..m3.+factor(Wellbore.Direction)+factor(Base.Fluid)+factor(Technology.Group),
+          data=rdata
+          )
+```
+```{r}
+summary(reg1)
+```
+set $\alpha$=0.05.
+
+$$H_o:\beta_i=0 \ \text{in the model}\\H_a:\text{at least one}\ \beta_i \text{is not 0}$$
+
+```{r}
+reg3 = lm(totalgas~1,data=rdata)
+anova(reg3,reg1)
+```
+
+**check the Multicollinearity**
+
+```{r}
+imcdiag(reg1,method='VIF')
+```
+
+```{r}
+reg_vif = lm(totalgas~MD..m.+TVD..m.+
+            Avg.Proppant.Design.per.Stage..tonne.+
+            X..of.Proppant.Placed....+
+            Avg.Fluid.Pumped.per.Stage..m3.+Stages.Actual+Avg.Frac.Spacing..m.+Avg.Proppant.Placed...Meter..tonne.
+          +Acid.Vol..m3.+factor(Wellbore.Direction)+factor(Base.Fluid)+factor(Technology.Group),
+          data=rdata
+          )
+imcdiag(reg_vif,method='VIF')
+summary(reg_vif)
+```
+
+
+```{r}
+vif(reg_vif )
+```
+**** Individual t-test ****
+```{r}
+reg2 = lm(totalgas~MD..m.+TVD..m.+
+            Avg.Proppant.Design.per.Stage..tonne.+
+            
+            Avg.Fluid.Pumped.per.Stage..m3.+Stages.Actual+Avg.Frac.Spacing..m.+Avg.Proppant.Placed...Meter..tonne.
+          +Acid.Vol..m3.+factor(Wellbore.Direction)+factor(Base.Fluid)+factor(Technology.Group),
+          data=rdata
+          )
+summary(reg2)
+```
+
+
+
+
+Backward Elimination Procedure
+```{r}
+backmodel=ols_step_backward_p(reg_vif, prem = 0.05, details=FALSE)
+```
+```{r}
+summary(backmodel$model)
+```
+
+
+
+
+
+
+```{r}
+formodel=ols_step_forward_p(reg_vif,penter = 0.05, details=FALSE)
+```
+```{r}
+summary(formodel$model)
+```
+```{r}
+stepw=ols_step_both_p(reg_vif,pent=0.05,prem=0.1,details=FALSE)
+```
+```{r}
+summary(stepw$model)
+```
+```{r}
+ks=ols_step_best_subset(reg_vif, details=TRUE)
+par(mfrow=c(2,2)) 
+plot(ks$cp,type = "o",pch=19, xlab="Number of Variables",ylab= "Cp")
+plot(ks$rsq,type = "o",pch=19, xlab="Number of Variables",ylab= "R^2")
+plot(ks$aic,type = "o",pch=19, xlab="Number of Variables",ylab= "AIC")
+plot(ks$adjr,type = "o",pch=19, xlab="Number of Variables",ylab= "Adjusted R^2")
+```
+Assumption:
+
+
+interactmodel
+
+```{r}
+reg_int = lm(totalgas~(MD..m.+TVD..m.+
+            Avg.Proppant.Design.per.Stage..tonne.+
+            Avg.Fluid.Pumped.per.Stage..m3.+Stages.Actual+Avg.Frac.Spacing..m.+Avg.Proppant.Placed...Meter..tonne.
+          +Acid.Vol..m3.+factor(Wellbore.Direction)+factor(Base.Fluid)+factor(Technology.Group))^2,
+          data=rdata
+          )
+summary(reg_int)
+```
+```{r}
+pairs(~totalgas+MD..m.+TVD..m.+
+            Avg.Proppant.Design.per.Stage..tonne.+
+            Avg.Fluid.Pumped.per.Stage..m3.+Stages.Actual+Avg.Frac.Spacing..m.+Avg.Proppant.Placed...Meter..tonne.
+          +Acid.Vol..m3.+factor(Wellbore.Direction)+factor(Base.Fluid)+factor(Technology.Group),
+          data=rdata, panel = panel.smooth) 
+```
+
+
+
+```{r}
+reg_int1 = lm(totalgas~MD..m.+TVD..m.+
+            Avg.Proppant.Design.per.Stage..tonne.+
+            Avg.Fluid.Pumped.per.Stage..m3.+Stages.Actual+Avg.Frac.Spacing..m.+Avg.Proppant.Placed...Meter..tonne.
+          +Acid.Vol..m3.+factor(Wellbore.Direction)+factor(Base.Fluid)+factor(Technology.Group)+
+            Acid.Vol..m3.*factor(Technology.Group)+
+            Avg.Frac.Spacing..m.*factor(Technology.Group)+
+            Stages.Actual*factor(Technology.Group)+
+            Avg.Fluid.Pumped.per.Stage..m3.*factor(Technology.Group)+
+            Avg.Fluid.Pumped.per.Stage..m3.*Acid.Vol..m3.+
+            Avg.Fluid.Pumped.per.Stage..m3.*Avg.Frac.Spacing..m.+
+            Avg.Proppant.Design.per.Stage..tonne.*Acid.Vol..m3.+
+            Avg.Proppant.Design.per.Stage..tonne.*Avg.Frac.Spacing..m.+
+            TVD..m.*factor(Technology.Group)+
+            TVD..m.*factor(Base.Fluid)+
+            TVD..m.*Acid.Vol..m3.+
+            TVD..m.*Avg.Proppant.Placed...Meter..tonne.+
+            TVD..m.*Avg.Fluid.Pumped.per.Stage..m3.+
+            TVD..m.*Avg.Proppant.Design.per.Stage..tonne.+
+            MD..m.*TVD..m.,
+          data=rdata
+          )
+summary(reg_int1)
+```
+
+```{r}
+lev=hatvalues(reg_int1)
+p = length(coef(reg_int1))
+n = nrow(rdata)
+outlier = lev[lev>(2*p/n)]
+outlierdf= data.frame(outlier)
+outlierdf
+outlier_index = outlierdf[0]
+print(outlier_index)
+print(c(outlier_index))
+```
+```{r}
+rdata1= rdata[-c(outlier_index),]
+reg_int1_re = lm(totalgas~MD..m.+TVD..m.+
+            Avg.Proppant.Design.per.Stage..tonne.+
+            Avg.Fluid.Pumped.per.Stage..m3.+Stages.Actual+Avg.Frac.Spacing..m.+Avg.Proppant.Placed...Meter..tonne.
+          +Acid.Vol..m3.+factor(Wellbore.Direction)+factor(Base.Fluid)+factor(Technology.Group)+
+            Acid.Vol..m3.*factor(Technology.Group)+
+            Avg.Frac.Spacing..m.*factor(Technology.Group)+
+            Stages.Actual*factor(Technology.Group)+
+            Avg.Fluid.Pumped.per.Stage..m3.*factor(Technology.Group)+
+            Avg.Fluid.Pumped.per.Stage..m3.*Acid.Vol..m3.+
+            Avg.Fluid.Pumped.per.Stage..m3.*Avg.Frac.Spacing..m.+
+            Avg.Proppant.Design.per.Stage..tonne.*Acid.Vol..m3.+
+            Avg.Proppant.Design.per.Stage..tonne.*Avg.Frac.Spacing..m.+
+            TVD..m.*factor(Technology.Group)+
+            TVD..m.*factor(Base.Fluid)+
+            TVD..m.*Acid.Vol..m3.+
+            TVD..m.*Avg.Proppant.Placed...Meter..tonne.+
+            TVD..m.*Avg.Fluid.Pumped.per.Stage..m3.+
+            TVD..m.*Avg.Proppant.Design.per.Stage..tonne.+
+            MD..m.*TVD..m.,
+          data=rdata1
+          )
+summary(reg_int1_re)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
